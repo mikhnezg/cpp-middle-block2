@@ -26,16 +26,23 @@ std::expected<details::scan_result<Ts...>, details::scan_error> scan(std::string
          ...);
     }(std::index_sequence_for<Ts...>{});
 
-    bool all_ok = std::apply([](auto &&...exps) { return (exps.has_value() && ...); }, results);
+    details::scan_error err{""};
+    auto check = [&](auto &&exp) {
+        if (!exp.has_value()) {
+            err = exp.error();
+            return false;
+        }
+        return true;
+    };
+
+    bool all_ok = std::apply([&check](auto &&...exps) { return (check(exps) && ...); }, results);
     if (!all_ok) {
-        details::scan_error err{""};
-        std::apply([&err](auto &&...exps) { ((void)(exps.has_value() || (err = exps.error(), false)), ...); }, results);
         return std::unexpected(err);
     }
 
-    auto values_tuple = std::apply([](auto &&...exps) { return std::make_tuple(exps.value()...); }, results);
-
-    return details::scan_result<Ts...>{values_tuple};
+    return std::apply(
+        [](auto &&...exps) { return details::scan_result<Ts...>{std::tuple<Ts...>(std::move(exps.value())...)}; },
+        results);
 }
 
-} 
+}  // namespace stdx

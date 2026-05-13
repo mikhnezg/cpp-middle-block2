@@ -14,95 +14,87 @@
 namespace stdx::details {
 
 template <typename T>
+std::expected<T, scan_error> parse_numeric_value(std::string_view input, std::string_view type_name) {
+    std::remove_cvref_t<T> value{};
+    auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
+    if (ec != std::errc{}) {
+        return std::unexpected(scan_error{"Failed to parse " + std::string(type_name)});
+    }
+    if (ptr != input.data() + input.size()) {
+        return std::unexpected(scan_error{"Extra characters in " + std::string(type_name) + " input"});
+    }
+    return static_cast<T>(value);
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view input)
+    requires(std::is_same_v<std::remove_cvref_t<T>, std::string>)
+{
+    return std::string(input);
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view input)
+    requires(std::is_same_v<std::remove_cvref_t<T>, std::string_view>)
+{
+    return input;
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view input)
+    requires(std::is_integral_v<std::remove_cvref_t<T>> && std::is_signed_v<std::remove_cvref_t<T>>)
+{
+    return parse_numeric_value<T>(input, "signed integer");
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view input)
+    requires(std::is_integral_v<std::remove_cvref_t<T>> && std::is_unsigned_v<std::remove_cvref_t<T>>)
+{
+    return parse_numeric_value<T>(input, "unsigned integer");
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view input)
+    requires(std::is_floating_point_v<std::remove_cvref_t<T>>)
+{
+    return parse_numeric_value<T>(input, "floating point");
+}
+
+template <typename T>
+std::expected<T, scan_error> parse_value(std::string_view) {
+    return std::unexpected(scan_error{"Unsupported type"});
+}
+
+template <typename T>
 std::expected<T, scan_error> parse_value_with_format(std::string_view input, std::string_view fmt) {
     if (fmt == "d") {
         if constexpr (std::is_integral_v<std::remove_cvref_t<T>> && std::is_signed_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse signed integer"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in integer input"});
-            }
-            return static_cast<T>(value);
+            return parse_value<T>(input);
         } else {
             return std::unexpected(scan_error{"Type mismatch: expected signed integer for 'd'"});
         }
     } else if (fmt == "u") {
         if constexpr (std::is_integral_v<std::remove_cvref_t<T>> && std::is_unsigned_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse unsigned integer"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in unsigned integer input"});
-            }
-            return static_cast<T>(value);
+            return parse_value<T>(input);
         } else {
             return std::unexpected(scan_error{"Type mismatch: expected unsigned integer for 'u'"});
         }
     } else if (fmt == "f") {
         if constexpr (std::is_floating_point_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse floating point"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in floating point input"});
-            }
-            return static_cast<T>(value);
+            return parse_value<T>(input);
         } else {
             return std::unexpected(scan_error{"Type mismatch: expected floating point for 'f'"});
         }
     } else if (fmt == "s") {
-        if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string>) {
-            return std::string(input);
-        } else if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string_view>) {
-            return input;
+        if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string> ||
+                      std::is_same_v<std::remove_cvref_t<T>, std::string_view>) {
+            return parse_value<T>(input);
         } else {
             return std::unexpected(scan_error{"Type mismatch: expected string or string_view for 's'"});
         }
     } else if (fmt.empty()) {
-        if constexpr (std::is_integral_v<std::remove_cvref_t<T>> && std::is_signed_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse signed integer"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in integer input"});
-            }
-            return static_cast<T>(value);
-        } else if constexpr (std::is_integral_v<std::remove_cvref_t<T>> && std::is_unsigned_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse unsigned integer"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in unsigned integer input"});
-            }
-            return static_cast<T>(value);
-        } else if constexpr (std::is_floating_point_v<std::remove_cvref_t<T>>) {
-            std::remove_cvref_t<T> value;
-            auto [ptr, ec] = std::from_chars(input.data(), input.data() + input.size(), value);
-            if (ec != std::errc{}) {
-                return std::unexpected(scan_error{"Failed to parse floating point"});
-            }
-            if (ptr != input.data() + input.size()) {
-                return std::unexpected(scan_error{"Extra characters in floating point input"});
-            }
-            return static_cast<T>(value);
-        } else if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string>) {
-            return std::string(input);
-        } else if constexpr (std::is_same_v<std::remove_cvref_t<T>, std::string_view>) {
-            return input;
-        } else {
-            return std::unexpected(scan_error{"Unsupported type for empty format"});
-        }
+        return parse_value<T>(input);
     } else {
         return std::unexpected(scan_error{"Unknown format specifier"});
     }
